@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f7f7f7;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            flex-direction: column;
+        }
+        canvas {
+            border: 2px solid #333;
+        }
+        #game-over {
+            position: absolute;
+            font-size: 3em;
+            color: #333;
+            font-weight: bold;
+            display: none;
+            text-align: center;
+        }
+        #restart-button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 1.2em;
+            cursor: pointer;
+            border: 2px solid #333;
+            background-color: #fff;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="200"></canvas>
+    <div id="game-over">¡Corazón Roto!</div>
+    <button id="restart-button">Volver a Intentar</button>
+
+    <script>
+        // Configuración del canvas y contexto
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Referencias a elementos del DOM
+        const gameOverEl = document.getElementById('game-over');
+        const restartButtonEl = document.getElementById('restart-button');
+
+        // Variables del juego
+        let score = 0;
+        let isGameOver = false;
+        let heart = {};
+        let obstacles = [];
+        let gameFrame = 0;
+        let speed = 5;
+
+        // Cargar las imágenes
+        const heartImage = new Image();
+        heartImage.src = 'corazon.png';
+        
+        const sImage = new Image();
+        sImage.src = 'S.png';
+
+        const pImage = new Image();
+        pImage.src = 'P.png';
+
+        const bgImage = new Image();
+        bgImage.src = 'f.jpg';
+
+        // Almacenar las imágenes de los obstáculos en un array para un fácil acceso
+        const obstacleImages = [sImage, pImage];
+
+        // Configuración del corazón (personaje)
+        const heartProps = {
+            x: 50,
+            y: 150,
+            width: 60,
+            height: 60,
+            yVelocity: 0,
+            isJumping: false,
+        };
+
+        // Contador para asegurar que todas las imágenes se carguen
+        let imagesLoadedCount = 0;
+        const totalImages = 4; // 1 corazón, 2 obstáculos, 1 fondo
+
+        const onImageLoad = () => {
+            imagesLoadedCount++;
+            if (imagesLoadedCount === totalImages) {
+                initGame();
+            }
+        };
+
+        heartImage.onload = onImageLoad;
+        sImage.onload = onImageLoad;
+        pImage.onload = onImageLoad;
+        bgImage.onload = onImageLoad;
+
+        if (heartImage.complete && sImage.complete && pImage.complete && bgImage.complete) {
+            initGame();
+        }
+
+        // Función para inicializar el juego
+        function initGame() {
+            score = 0;
+            isGameOver = false;
+            gameFrame = 0;
+            obstacles = [];
+            heart = { ...heartProps };
+            gameOverEl.style.display = 'none';
+            restartButtonEl.style.display = 'none';
+
+            // Dibuja la pantalla inicial con el mensaje "HI"
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+            drawHeart();
+            ctx.fillStyle = 'gray';
+            ctx.font = '24px Arial';
+            ctx.fillText('HI', 70, 20);
+
+            // Espera una acción del usuario para empezar
+            document.addEventListener('keydown', startGame, { once: true });
+            document.addEventListener('click', startGame, { once: true });
+        }
+
+        // Función para iniciar el bucle del juego
+        function startGame() {
+            gameLoop();
+        }
+
+        // Función para dibujar el fondo
+        function drawBackground() {
+            ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+        }
+
+        // Función para dibujar el corazón (personaje)
+        function drawHeart() {
+            ctx.drawImage(heartImage, heart.x, heart.y, heart.width, heart.height);
+        }
+
+        // Función para actualizar la posición del corazón (salto)
+        function updateHeart() {
+            if (heart.isJumping) {
+                heart.yVelocity += 0.5;
+                heart.y += heart.yVelocity;
+
+                if (heart.y >= heartProps.y) {
+                    heart.y = heartProps.y;
+                    heart.isJumping = false;
+                    heart.yVelocity = 0;
+                }
+            }
+        }
+
+        // Función para dibujar los obstáculos (imágenes de S y P)
+        function drawObstacles() {
+            for (const obs of obstacles) {
+                ctx.drawImage(obs.image, obs.x, obs.y, obs.width, obs.height);
+            }
+        }
+
+        // Función para actualizar la posición de los obstáculos
+        function updateObstacles() {
+            for (let i = 0; i < obstacles.length; i++) {
+                obstacles[i].x -= speed;
+            }
+
+            if (gameFrame % 100 === 0) {
+                const obsWidth = 30;
+                const obsHeight = 30;
+                const randomImage = obstacleImages[Math.floor(Math.random() * obstacleImages.length)];
+                obstacles.push({
+                    x: canvas.width,
+                    y: canvas.height - obsHeight,
+                    width: obsWidth,
+                    height: obsHeight,
+                    image: randomImage,
+                });
+            }
+
+            if (obstacles.length > 0 && obstacles[0].x + obstacles[0].width < 0) {
+                obstacles.shift();
+            }
+        }
+
+        // Función para detectar colisiones
+        function checkCollisions() {
+            for (const obs of obstacles) {
+                if (
+                    heart.x < obs.x + obs.width &&
+                    heart.x + heart.width > obs.x &&
+                    heart.y < obs.y + obs.height &&
+                    heart.y + heart.height > obs.y
+                ) {
+                    isGameOver = true;
+                }
+            }
+        }
+
+        // Función para el bucle principal del juego
+        function gameLoop() {
+            if (isGameOver) {
+                gameOverEl.style.display = 'block';
+                restartButtonEl.style.display = 'block';
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawBackground();
+            updateHeart();
+            updateObstacles();
+            checkCollisions();
+
+            drawHeart();
+            drawObstacles();
+
+            score++;
+            ctx.fillStyle = 'black';
+            ctx.font = '16px Arial';
+            ctx.fillText('Puntuación: ' + Math.floor(score / 10), 10, 20);
+
+            gameFrame++;
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Eventos
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !heart.isJumping) {
+                heart.isJumping = true;
+                heart.yVelocity = -10;
+            }
+        });
+
+        restartButtonEl.addEventListener('click', () => {
+            initGame();
+        });
+
+        // Iniciar el juego al cargar la página
+        initGame();
+    </script>
+</body>
+</html>

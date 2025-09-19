@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Corre corazon</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-image: url('f2.png');
+            background-size: cover; 
+            background-position: center;
+            background-repeat: no-repeat;
+            margin: 0;
+            font-family: Arial, sans-serif;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        canvas {
+            border: 2px solid #333;
+            /* El tamaño se establecerá en JavaScript */
+        }
+
+        #game-over {
+            position: absolute;
+            font-size: 8vmin;
+            color: #333;
+            font-weight: bold;
+            text-align: center;
+            display: none;
+            top: 35%;
+            transform: translateY(-50%);
+        }
+
+        #restart-button {
+            margin-top: 20px;
+            padding: 15px 30px;
+            font-size: 4vmin;
+            cursor: pointer;
+            border: 2px solid #333;
+            background-color: #fff;
+            display: none;
+            touch-action: manipulation;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    <div id="game-over">¡Game-over! 💔</div>
+    <button id="restart-button">Volver a Intentar</button>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const gameOverEl = document.getElementById('game-over');
+        const restartButtonEl = document.getElementById('restart-button');
+
+        let score = 0;
+        let highScore = 0;
+        let isGameOver = false;
+        let heart = {};
+        let obstacles = [];
+        let gameFrame = 0;
+        let speed = 4;
+        const MAX_SPEED = 5;
+
+        let collectibles = [];
+        let hasPowerUp = false;
+        let powerUpDuration = 0;
+        const POWER_UP_MAX_DURATION = 300;
+
+        const gameMusic = new Audio('musica_.mp3');
+        gameMusic.loop = true;
+
+        const heartImage = new Image();
+        heartImage.src = 'corazon.png';
+        
+        const sImage = new Image();
+        sImage.src = 'S.png';
+
+        const pImage = new Image();
+        pImage.src = 'P.png';
+
+        const bgImage = new Image();
+        bgImage.src = 'f.jpg';
+
+        const starImage = new Image();
+        starImage.src = 'star.png'; 
+
+        const obstacleImages = [sImage, pImage];
+
+        const heartProps = {
+            x: 50,
+            y: 150,
+            width: 70,
+            height: 70,
+            yVelocity: 0,
+            isJumping: false,
+        };
+
+        let imagesLoadedCount = 0;
+        const totalImages = 5; 
+
+        const onImageLoad = () => {
+            imagesLoadedCount++;
+            if (imagesLoadedCount === totalImages) {
+                initGame();
+            }
+        };
+
+        heartImage.onload = onImageLoad;
+        sImage.onload = onImageLoad;
+        pImage.onload = onImageLoad;
+        bgImage.onload = onImageLoad;
+        starImage.onload = onImageLoad; 
+
+        if (heartImage.complete && sImage.complete && pImage.complete && bgImage.complete && starImage.complete) {
+            initGame();
+        }
+
+        function setCanvasDimensions() {
+            const gameWidth = 800;
+            const gameHeight = 200;
+            const aspectRatio = gameWidth / gameHeight;
+
+            if (window.innerWidth < gameWidth) {
+                canvas.width = window.innerWidth * 0.9;
+                canvas.height = canvas.width / aspectRatio;
+            } else {
+                canvas.width = gameWidth;
+                canvas.height = gameHeight;
+            }
+        }
+
+        function initGame() {
+            setCanvasDimensions();
+            score = 0;
+            isGameOver = false;
+            gameFrame = 0;
+            obstacles = [];
+            collectibles = [];
+            hasPowerUp = false;
+            powerUpDuration = 0;
+            heart = { ...heartProps };
+            gameOverEl.style.display = 'none';
+            restartButtonEl.style.display = 'none';
+
+            speed = 4;
+
+            gameMusic.pause();
+            gameMusic.currentTime = 0;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBackground();
+            drawHeart();
+            ctx.fillStyle = 'gray';
+            ctx.font = '24px Arial';
+            ctx.fillText('HI', 70, 20);
+
+            document.removeEventListener('keydown', startGame);
+            document.removeEventListener('touchstart', startGame);
+            document.removeEventListener('mousedown', startGame);
+
+            document.addEventListener('keydown', startGame, { once: true });
+            document.addEventListener('touchstart', startGame, { once: true });
+            document.addEventListener('mousedown', startGame, { once: true });
+        }
+
+        function handleJump() {
+            if (!heart.isJumping) {
+                heart.isJumping = true;
+                heart.yVelocity = -10;
+            }
+        }
+
+        function startGame() {
+            gameMusic.play().catch(e => console.log("No se pudo reproducir la música automáticamente:", e));
+            gameLoop();
+        }
+
+        function drawBackground() {
+            ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'right'; 
+            ctx.fillText('Hecho por ANDY DUARTE', canvas.width - 15, canvas.height - 10);
+            ctx.textAlign = 'left';
+        }
+
+        function drawHeart() {
+            ctx.drawImage(heartImage, heart.x, heart.y, heart.width, heart.height);
+        }
+
+        function updateHeart() {
+            if (heart.isJumping) {
+                heart.yVelocity += 0.5;
+                heart.y += heart.yVelocity;
+
+                if (heart.y >= heartProps.y) {
+                    heart.y = heartProps.y;
+                    heart.isJumping = false;
+                    heart.yVelocity = 0;
+                }
+            }
+        }
+
+        function drawObstacles() {
+            for (const obs of obstacles) {
+                ctx.drawImage(obs.image, obs.x, obs.y, obs.width, obs.height);
+            }
+        }
+
+        function updateObstacles() {
+            if (hasPowerUp && Math.floor(score / 10) > 200) {
+                 obstacles = []; 
+            } else {
+                for (let i = 0; i < obstacles.length; i++) {
+                    obstacles[i].x -= speed;
+                }
+            }
+
+            if (gameFrame % 100 === 0) {
+                const obsWidth = 60;
+                const obsHeight = 60;
+                const randomImage = obstacleImages[Math.floor(Math.random() * obstacleImages.length)];
+                obstacles.push({
+                    x: canvas.width,
+                    y: canvas.height - obsHeight,
+                    width: obsWidth,
+                    height: obsHeight,
+                    image: randomImage,
+                });
+            }
+
+            if (obstacles.length > 0 && obstacles[0].x + obstacles[0].width < 0) {
+                obstacles.shift();
+            }
+        }
+
+        function drawCollectibles() {
+            for (const item of collectibles) {
+                ctx.drawImage(starImage, item.x, item.y, item.width, item.height);
+            }
+        }
+
+        function updateCollectibles() {
+            for (let i = 0; i < collectibles.length; i++) {
+                collectibles[i].x -= speed;
+            }
+
+            if (gameFrame % 1000 === 0 && !hasPowerUp && Math.random() < 0.5) { 
+                const itemWidth = 40;
+                const itemHeight = 40;
+                collectibles.push({
+                    x: canvas.width,
+                    y: Math.random() * (canvas.height - itemHeight - 50) + 50,
+                    width: itemWidth,
+                    height: itemHeight,
+                });
+            }
+
+            if (collectibles.length > 0 && collectibles[0].x + collectibles[0].width < 0) {
+                collectibles.shift();
+            }
+        }
+
+        function checkCollisions() {
+            const heartHitbox = {
+                x: heart.x + 15,
+                y: heart.y + 15,
+                width: heart.width - 30,
+                height: heart.height - 30,
+            };
+
+            for (const obs of obstacles) {
+                const obsHitbox = {
+                    x: obs.x + 10,
+                    y: obs.y + 10,
+                    width: obs.width - 20,
+                    height: obs.height - 20,
+                };
+
+                if (
+                    !hasPowerUp && 
+                    heartHitbox.x < obsHitbox.x + obsHitbox.width &&
+                    heartHitbox.x + heartHitbox.width > obsHitbox.x &&
+                    heartHitbox.y < obsHitbox.y + obsHitbox.height &&
+                    heartHitbox.y + heartHitbox.height > obsHitbox.y
+                ) {
+                    isGameOver = true;
+                    if (Math.floor(score / 10) > highScore) {
+                        highScore = Math.floor(score / 10);
+                    }
+                }
+            }
+
+            for (let i = 0; i < collectibles.length; i++) {
+                const item = collectibles[i];
+                const itemHitbox = {
+                    x: item.x,
+                    y: item.y,
+                    width: item.width,
+                    height: item.height,
+                };
+
+                if (
+                    heartHitbox.x < itemHitbox.x + itemHitbox.width &&
+                    heartHitbox.x + heartHitbox.width > itemHitbox.x &&
+                    heartHitbox.y < itemHitbox.y + itemHitbox.height &&
+                    heartHitbox.y + heartHitbox.height > itemHitbox.y
+                ) {
+                    collectibles.splice(i, 1);
+                    hasPowerUp = true;
+                    powerUpDuration = POWER_UP_MAX_DURATION;
+                    break; 
+                }
+            }
+        }
+
+        function gameLoop() {
+            if (isGameOver) {
+                gameOverEl.style.display = 'block';
+                restartButtonEl.style.display = 'block';
+                gameMusic.pause(); 
+                gameMusic.currentTime = 0; 
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawBackground();
+            updateHeart();
+            updateObstacles();
+            updateCollectibles(); 
+            checkCollisions();
+
+            drawHeart();
+            drawObstacles();
+            drawCollectibles(); 
+
+            score++;
+            ctx.fillStyle = 'black';
+            ctx.font = '16px Arial';
+            ctx.fillText('Puntuación: ' + Math.floor(score / 10), 10, 20);
+            
+            ctx.fillStyle = 'gray';
+            ctx.fillText('Mejor: ' + highScore, canvas.width - 100, 20);
+
+            if (hasPowerUp) {
+                ctx.fillStyle = 'blue';
+                ctx.fillText('¡Power-up inmune! Duración: ' + Math.ceil(powerUpDuration / 60), canvas.width / 2 - 50, 20);
+                powerUpDuration--;
+                if (powerUpDuration <= 0) {
+                    hasPowerUp = false;
+                }
+            }
+
+            if (gameFrame % 500 === 0 && speed < MAX_SPEED) {
+                speed += 0.1;
+                if (speed > MAX_SPEED) {
+                    speed = MAX_SPEED;
+                }
+            }
+
+            gameFrame++;
+            requestAnimationFrame(gameLoop);
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                handleJump();
+            }
+        });
+
+        document.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleJump();
+        });
+
+        document.addEventListener('mousedown', (e) => {
+            handleJump();
+        });
+
+        restartButtonEl.addEventListener('click', () => {
+            initGame();
+        });
+
+        restartButtonEl.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            initGame();
+        });
+
+        initGame();
+    </script>
+</body>
+</html>
